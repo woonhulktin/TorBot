@@ -5,6 +5,8 @@ import argparse
 import socket
 import socks
 
+import csv
+
 from requests.exceptions import HTTPError
 
 from modules.analyzer import LinkTree
@@ -128,7 +130,30 @@ def get_args():
                         action="store_true",
                         help="Don't use local SOCKS. Useful when TorBot is"
                              " launched behind a Whonix Gateway")
+
+    parser.add_argument("--explore", help="Explore the universe of dark web")
+    parser.add_argument("--level", help="Specify the max level of the link tree")
+
     return parser.parse_args()
+
+
+def explore(node_links, level):
+    all_links = []
+    if level > 0:
+        for link in node_links:
+            if ".onion" in str(link) and not link in all_links:
+                try:
+                    child_node = LinkNode(link)
+                except (ValueError, HTTPError, ConnectionError) as err:
+                    raise err
+                LinkIO.display_children(child_node)
+                child_node_links = child_node.links
+                all_links = child_node_links
+                level -= 1
+                del child_node
+                all_child_links = explore(child_node_links, level)
+                all_links = all_links + all_child_links
+    return all_links
 
 
 def main():
@@ -183,6 +208,46 @@ def main():
             LinkIO.display_children(node)
             if args.save:
                 saveJson("Links", node.links)
+    if args.explore:
+        # Default level
+        level = 10
+        all_links = []
+        if args.level:
+            level = int(args.level)
+
+        # path = args.explore
+        # with open(path, newline='') as f:
+        #     reader = csv.reader(f)
+        #     input_urls = list(reader)[0]
+
+        # print("Start Links: ")
+        # print(input_urls)
+
+        # for input_url in input_urls:
+        #     try:
+        #         root_node = LinkNode(input_url)
+        #     except (ValueError, HTTPError, ConnectionError) as err:
+        #         raise err
+        #     LinkIO.display_children(root_node)
+        #     node_links = root_node.links
+        #     all_links = node_links
+        #     del root_node
+        #     all_child_links = explore(node_links, level)
+        #     all_links = all_links + all_child_links
+
+        try:
+            root_node = LinkNode(args.explore)
+        except (ValueError, HTTPError, ConnectionError) as err:
+            raise err
+        LinkIO.display_children(root_node)
+        node_links = root_node.links
+        all_links = node_links
+        del root_node
+        all_child_links = explore(node_links, level)
+        all_links = all_links + all_child_links
+
+        saveJson("Links", all_links)
+
     else:
         print("usage: See torBot.py -h for possible arguments.")
 
